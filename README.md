@@ -15,8 +15,6 @@ pip install -r requirements.txt
 
 ## Run
 
-- 
-
 ```bash
 # onnx inference
 python inference_pgnet.py https://github.com/mjq2020/pgnet_ocr/releases/download/v0.1/pgnet.onnx images/test.png
