@@ -13,7 +13,6 @@
 # limitations under the License.
 import numpy as np
 import cv2
-import time
 
 
 def resize_image(im, max_side_len=512):
