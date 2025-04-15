@@ -5,14 +5,16 @@ This is PGNET's onnxruntime inference implementation of [PaddleOCR](https://gith
 ## Setup
 
 ```bash
+git clone https://github.com/mjq2020/pgnet_ocr.git
+
+cd pgnet_ocr
 pip install -r requirements.txt
-wget https://github.com/kuroko1t/onnx-ocr/releases/download/0.1/pgnet.onnx
 ```
 
 ## Run
 
 ```bash
-python inference_pgnet.py pgnet.onnx images/test.png
+python inference_pgnet.py https://github.com/mjq2020/pgnet_ocr/releases/download/v0.1/pgnet.onnx images/test.png
 ```
 
 ## Result
