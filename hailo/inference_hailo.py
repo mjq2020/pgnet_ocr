@@ -155,9 +155,11 @@ class HailoRTInference(BaseHailoInference):
 
 
 if __name__ == "__main__":
-    inference = HailoRTInference(hef_file="/home/hk/mjq/hailo_tools/onnx_pgnet_640x640_modify.hef")
+    inference = HailoRTInference(
+        hef_file="/home/hk/mjq/hailo_tools/onnx_pgnet_640x640_modify.hef"
+    )
     inputs = inference.get_inputs()
-    input_data = np.random.randn(1,3,640,640).astype(np.uint8)
+    input_data = np.random.randn(1, 3, 640, 640).astype(np.uint8)
     outputs = inference.run(inputs[0].name, input_data)
     for key, output in outputs.items():
         print(key, output.shape)

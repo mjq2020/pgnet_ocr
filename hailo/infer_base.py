@@ -3,7 +3,6 @@ from abc import abstractmethod, ABCMeta
 
 
 class BaseHailoInference(metaclass=ABCMeta):
-
     def __init__(self):
         pass
 

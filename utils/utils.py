@@ -1,6 +1,6 @@
-
 import cv2
 import numpy as np
+
 
 class ToCHWImage(object):
     """convert hwc image to chw image"""
@@ -16,6 +16,7 @@ class ToCHWImage(object):
             img = np.array(img)
         data["image"] = img.transpose((2, 0, 1))
         return data
+
 
 class NormalizeImage(object):
     """normalize image such as subtract mean, divide std"""
@@ -51,7 +52,8 @@ class KeepKeys(object):
         for key in self.keep_keys:
             data_list.append(data[key])
         return data_list
-    
+
+
 class E2EResizeForTest(object):
     def __init__(self, **kwargs):
         super(E2EResizeForTest, self).__init__()

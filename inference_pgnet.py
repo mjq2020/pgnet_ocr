@@ -23,13 +23,11 @@ class PGNetPredictor:
             providers = ["CUDAExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
-            
+
         model_path = self._get_model_path(args.model_path)
-        
+
         if model_path.endswith(".onnx"):
-            self.sess = onnxruntime.InferenceSession(
-                model_path, providers=providers
-            )
+            self.sess = onnxruntime.InferenceSession(model_path, providers=providers)
         else:
             self.sess = HailoRTInference(model_path)
         self.infer_type = "onnx" if model_path.endswith(".onnx") else "hailo"
@@ -38,13 +36,13 @@ class PGNetPredictor:
         """
         如果模型路径是URL，则下载模型到缓存目录
         """
-        if model_path.startswith(('http://', 'https://')):
-            cache_dir = os.path.join(os.path.expanduser('~'), '.pgnet_models')
+        if model_path.startswith(("http://", "https://")):
+            cache_dir = os.path.join(os.path.expanduser("~"), ".pgnet_models")
             os.makedirs(cache_dir, exist_ok=True)
-            
+
             # 使用URL的MD5值作为文件名
             url_md5 = hashlib.md5(model_path.encode()).hexdigest()
-            file_ext = os.path.splitext(model_path)[1] or '.onnx'
+            file_ext = os.path.splitext(model_path)[1] or ".onnx"
             cached_file = os.path.join(cache_dir, f"{url_md5}{file_ext}")
             if not os.path.exists(cached_file):
                 print(f"正在从{model_path}下载模型...")
@@ -52,47 +50,53 @@ class PGNetPredictor:
                     # 添加下载进度回调函数
                     def _progress_hook(count, block_size, total_size):
                         if total_size > 0:
-                            percent = min(int(count * block_size * 100 / total_size), 100)
+                            percent = min(
+                                int(count * block_size * 100 / total_size), 100
+                            )
                             downloaded = count * block_size
                             # 计算下载速度（字节/秒）
-                            if not hasattr(_progress_hook, 'start_time'):
+                            if not hasattr(_progress_hook, "start_time"):
                                 _progress_hook.start_time = time.time()
                                 _progress_hook.last_size = 0
                                 _progress_hook.last_time = _progress_hook.start_time
-                            
+
                             current_time = time.time()
                             interval = current_time - _progress_hook.last_time
-                            
+
                             # 每0.5秒更新一次显示
                             if interval > 0.5 or percent >= 100:
                                 size_diff = downloaded - _progress_hook.last_size
                                 speed = size_diff / interval if interval > 0 else 0
-                                
+
                                 # 转换单位
                                 if speed < 1024:
                                     speed_str = f"{speed:.2f} B/s"
                                 elif speed < 1024 * 1024:
-                                    speed_str = f"{speed/1024:.2f} KB/s"
+                                    speed_str = f"{speed / 1024:.2f} KB/s"
                                 else:
-                                    speed_str = f"{speed/(1024*1024):.2f} MB/s"
-                                
+                                    speed_str = f"{speed / (1024 * 1024):.2f} MB/s"
+
                                 if total_size < 1024 * 1024:
-                                    size_str = f"{downloaded/1024:.2f}/{total_size/1024:.2f} KB"
+                                    size_str = f"{downloaded / 1024:.2f}/{total_size / 1024:.2f} KB"
                                 else:
-                                    size_str = f"{downloaded/(1024*1024):.2f}/{total_size/(1024*1024):.2f} MB"
-                                
-                                print(f"\r下载进度: [{percent}%] {size_str} 速度: {speed_str}", end="", flush=True)
-                                
+                                    size_str = f"{downloaded / (1024 * 1024):.2f}/{total_size / (1024 * 1024):.2f} MB"
+
+                                print(
+                                    f"\r下载进度: [{percent}%] {size_str} 速度: {speed_str}",
+                                    end="",
+                                    flush=True,
+                                )
+
                                 _progress_hook.last_size = downloaded
                                 _progress_hook.last_time = current_time
-                    
+
                     urllib.request.urlretrieve(model_path, cached_file, _progress_hook)
                     print("\n模型已下载并保存到{}".format(cached_file))
                 except Exception as e:
                     raise Exception(f"下载模型时出错: {e}")
             else:
                 print(f"使用缓存的模型: {cached_file}")
-                
+
             return cached_file
         return model_path
 
@@ -124,27 +128,19 @@ class PGNetPredictor:
         return img, shape_list
 
     def predict(self, img):
-        print(self.sess.get_inputs()[0].name)
         if self.infer_type == "hailo":
             ort_inputs = {self.sess.get_inputs()[0].name: img.transpose(0, 2, 3, 1)}
         else:
             ort_inputs = {self.sess.get_inputs()[0].name: img}
-        for key, value in ort_inputs.items():
-            print(key, value.shape)
         outputs = self.sess.run(None, ort_inputs)
         preds = {}
         if isinstance(self.sess, onnxruntime.InferenceSession):
-            for out in outputs:
-                print(out.shape, out.dtype)
             preds["f_border"] = outputs[0]
             preds["f_char"] = outputs[1]
             preds["f_direction"] = outputs[2]
             preds["f_score"] = outputs[3]
         else:
-
             for key, output in outputs.items():
-                # print(output.shape,output.dtype)
-
                 if output.shape[-1] == 4:
                     preds["f_border"] = output.transpose(0, 3, 1, 2).astype(np.float32)
                     preds["f_border"][:, :2, ...] = preds["f_border"][:, :2, ...] / 640
@@ -159,10 +155,6 @@ class PGNetPredictor:
                     preds["f_char"] = output.transpose(0, 3, 1, 2).astype(np.float32)
                 else:
                     raise ValueError(f"output shape {output.shape} is not supported")
-        # print("f_border",preds["f_border"][0][0])
-        # print("f_char",preds["f_char"][0][0])
-        # print("f_direction",preds["f_direction"][0][0])
-        # print("f_score",preds["f_score"][0][0])
         return preds
 
     def filter_tag_det_res_only_clip(self, dt_boxes, image_shape):
@@ -201,7 +193,6 @@ class PGNetPredictor:
     def draw(self, dt_boxes, strs, img_path):
         src_im = cv2.imread(img_path)
         width, height, _ = src_im.shape
-        # print(dt_boxes, strs)
         for box, str in zip(dt_boxes, strs):
             box = box.astype(np.int32).reshape((-1, 1, 2))
             cv2.polylines(src_im, [box], True, color=(255, 255, 0), thickness=2)
