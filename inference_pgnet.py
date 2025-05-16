@@ -1,7 +1,5 @@
 import argparse
 import os
-import urllib.request
-import hashlib
 import time
 
 import cv2
@@ -10,12 +8,12 @@ import onnxruntime
 from utils.utils import E2EResizeForTest, KeepKeys, NormalizeImage, ToCHWImage
 from e2e_utils.pg_postprocess import PGPostProcess
 from hailo.inference_hailo import HailoRTInference
-
+from utils.download import download_model
 
 class PGNetPredictor:
     def __init__(self, img_path, cpu):
         self.img_path = img_path
-        self.dict_path = "utils/ic15_dict.txt"
+        self.dict_path = "utils/en_dict.txt"
         if not os.path.exists(self.dict_path):
             with open(self.dict_path, "w") as f:
                 f.writelines(chr_dct_list)
@@ -24,81 +22,13 @@ class PGNetPredictor:
         else:
             providers = ["CPUExecutionProvider"]
 
-        model_path = self._get_model_path(args.model_path)
+        model_path = download_model(args.model_path)
 
         if model_path.endswith(".onnx"):
             self.sess = onnxruntime.InferenceSession(model_path, providers=providers)
         else:
             self.sess = HailoRTInference(model_path)
         self.infer_type = "onnx" if model_path.endswith(".onnx") else "hailo"
-
-    def _get_model_path(self, model_path):
-        """
-        如果模型路径是URL，则下载模型到缓存目录
-        """
-        if model_path.startswith(("http://", "https://")):
-            cache_dir = os.path.join(os.path.expanduser("~"), ".pgnet_models")
-            os.makedirs(cache_dir, exist_ok=True)
-
-            # 使用URL的MD5值作为文件名
-            url_md5 = hashlib.md5(model_path.encode()).hexdigest()
-            file_ext = os.path.splitext(model_path)[1] or ".onnx"
-            cached_file = os.path.join(cache_dir, f"{url_md5}{file_ext}")
-            if not os.path.exists(cached_file):
-                print(f"正在从{model_path}下载模型...")
-                try:
-                    # 添加下载进度回调函数
-                    def _progress_hook(count, block_size, total_size):
-                        if total_size > 0:
-                            percent = min(
-                                int(count * block_size * 100 / total_size), 100
-                            )
-                            downloaded = count * block_size
-                            # 计算下载速度（字节/秒）
-                            if not hasattr(_progress_hook, "start_time"):
-                                _progress_hook.start_time = time.time()
-                                _progress_hook.last_size = 0
-                                _progress_hook.last_time = _progress_hook.start_time
-
-                            current_time = time.time()
-                            interval = current_time - _progress_hook.last_time
-
-                            # 每0.5秒更新一次显示
-                            if interval > 0.5 or percent >= 100:
-                                size_diff = downloaded - _progress_hook.last_size
-                                speed = size_diff / interval if interval > 0 else 0
-
-                                # 转换单位
-                                if speed < 1024:
-                                    speed_str = f"{speed:.2f} B/s"
-                                elif speed < 1024 * 1024:
-                                    speed_str = f"{speed / 1024:.2f} KB/s"
-                                else:
-                                    speed_str = f"{speed / (1024 * 1024):.2f} MB/s"
-
-                                if total_size < 1024 * 1024:
-                                    size_str = f"{downloaded / 1024:.2f}/{total_size / 1024:.2f} KB"
-                                else:
-                                    size_str = f"{downloaded / (1024 * 1024):.2f}/{total_size / (1024 * 1024):.2f} MB"
-
-                                print(
-                                    f"\r下载进度: [{percent}%] {size_str} 速度: {speed_str}",
-                                    end="",
-                                    flush=True,
-                                )
-
-                                _progress_hook.last_size = downloaded
-                                _progress_hook.last_time = current_time
-
-                    urllib.request.urlretrieve(model_path, cached_file, _progress_hook)
-                    print("\n模型已下载并保存到{}".format(cached_file))
-                except Exception as e:
-                    raise Exception(f"下载模型时出错: {e}")
-            else:
-                print(f"使用缓存的模型: {cached_file}")
-
-            return cached_file
-        return model_path
 
     def preprocess(self, img_path):
         img = cv2.imread(img_path)
@@ -151,7 +81,7 @@ class PGNetPredictor:
                     preds["f_direction"] = output.transpose(0, 3, 1, 2).astype(
                         np.float32
                     )
-                elif output.shape[-1] == 37:
+                elif output.shape[-1] == 96:
                     preds["f_char"] = output.transpose(0, 3, 1, 2).astype(np.float32)
                 else:
                     raise ValueError(f"output shape {output.shape} is not supported")
@@ -221,5 +151,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     pgnetpredictor = PGNetPredictor(args.img_path, args.cpu)
     dt_boxes, strs = pgnetpredictor()
+    number = 100
+    start_time = time.time()
+    for i in range(number):
+        dt_boxes, strs = pgnetpredictor()
+    end_time = time.time()
     print(f"Predict string:{strs}")
     pgnetpredictor.draw(dt_boxes, strs, args.img_path)
+    print(f"Predict time: {(end_time - start_time)/number} seconds")
